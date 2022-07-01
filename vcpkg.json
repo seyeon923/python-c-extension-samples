@@ -1,9 +1,0 @@
-{
-    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
-    "name": "python-c-extension-samples",
-    "version": "0.0.1",
-    "dependencies": [
-        "python3"
-    ],
-    "builtin-baseline": "339a9f5e1347976d69e369e4ec99e8e59d321acc"
-}
