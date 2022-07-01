@@ -52,3 +52,37 @@ try:
 except Exception as ex:
     print(f'{type(ex).__name__}: {ex}')
 print()
+
+print('Test module custom3')
+import custom4
+import gc
+
+
+class Derived(custom3.Custom):
+    pass
+
+
+print('Create object "n" derived from custom3.Custom')
+n = Derived()
+print('Add circular reference')
+n.some_attribute = n
+print('Delete "n"')
+del n
+print('Do garbage collect')
+gc.collect()
+print()
+
+
+class Derived(custom4.Custom):
+    pass
+
+
+print('Create object "n" derived from custom4.Custom')
+n = Derived()
+print('Add circular reference')
+n.some_attribute = n
+print('Delete "n"')
+del n
+print('Do garbage collect')
+gc.collect()
+print()

@@ -10,16 +10,28 @@ typedef struct {
     PyObject_HEAD
     PyObject* first; // first name
     // clang-format on
-    PyObject* last;  // last name
+    PyObject* last;
     int number;
 } CustomObject;
 
+static int Custom_traverse(CustomObject* self, visitproc visit, void* arg) {
+    Py_VISIT(self->first);
+    Py_VISIT(self->last);
+    return 0;
+}
+
+static int Custom_clear(CustomObject* self) {
+    Py_CLEAR(self->first);
+    Py_CLEAR(self->last);
+    return 0;
+}
+
 static void Custom_dealloc(CustomObject* self) {
-    Py_XDECREF(self->first);
-    Py_XDECREF(self->last);
+    PyObject_GC_UnTrack(self);
+    Custom_clear(self);
     Py_TYPE(self)->tp_free((PyObject*)self);
 
-    printf("Custom object destructed!\n");
+    printf("Custom object destructed\n");
 }
 
 static PyObject* Custom_new(PyTypeObject* type, PyObject* args,
@@ -59,14 +71,12 @@ static int Custom_init(CustomObject* self, PyObject* args, PyObject* kwargs) {
         self->first = first;
         Py_DECREF(tmp);
     }
-
     if (last) {
         tmp = self->last;
-        Py_IncRef(last);
+        Py_INCREF(last);
         self->last = last;
         Py_DECREF(tmp);
     }
-
     return 0;
 }
 
@@ -81,7 +91,6 @@ static PyObject* Custom_getfirst(CustomObject* self, void* closure) {
 }
 
 static int Custom_setfirst(CustomObject* self, PyObject* value, void* closure) {
-    PyObject* tmp;
     if (value == NULL) {
         PyErr_SetString(PyExc_TypeError, "Cannot delete the 'first' attribute");
         return -1;
@@ -91,12 +100,9 @@ static int Custom_setfirst(CustomObject* self, PyObject* value, void* closure) {
                         "The 'first' attribute value must be a string");
         return -1;
     }
-
-    tmp = self->first;
     Py_INCREF(value);
+    Py_CLEAR(self->first);
     self->first = value;
-    Py_DECREF(tmp);
-
     return 0;
 }
 
@@ -106,21 +112,18 @@ static PyObject* Custom_getlast(CustomObject* self, void* closure) {
 }
 
 static int Custom_setlast(CustomObject* self, PyObject* value, void* closure) {
-    PyObject* tmp;
     if (value == NULL) {
         PyErr_SetString(PyExc_TypeError, "Cannot delete the 'last' attribute");
         return -1;
     }
     if (!PyUnicode_Check(value)) {
-        PyErr_SetString(PyExc_TypeError, "Cannot delete the 'last' attribute");
+        PyErr_SetString(PyExc_TypeError,
+                        "The 'last' attribute value must be a string");
         return -1;
     }
-
-    tmp = self->last;
     Py_INCREF(value);
+    Py_CLEAR(self->last);
     self->last = value;
-    Py_DECREF(tmp);
-
     return 0;
 }
 
@@ -128,7 +131,7 @@ static PyGetSetDef Custom_getsetters[] = {
     {"first", (getter)Custom_getfirst, (setter)Custom_setfirst, "first name",
      NULL},
     {"last", (getter)Custom_getlast, (setter)Custom_setlast, "last name", NULL},
-    {NULL}  // Sentinel
+    {NULL} /* Sentinel */
 };
 
 static PyObject* Custom_name(CustomObject* self, PyObject* Py_UNUSED(ignored)) {
@@ -138,21 +141,23 @@ static PyObject* Custom_name(CustomObject* self, PyObject* Py_UNUSED(ignored)) {
 static PyMethodDef Custom_methods[] = {
     {"name", (PyCFunction)Custom_name, METH_NOARGS,
      "Return the name, combining the first and last name"},
-    {NULL}  // Sentinel
+    {NULL} /* Sentinel */
 };
 
 static PyTypeObject CustomType = {
     // clang-format off
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "custom3.Custom",
+    .tp_name = "custom4.Custom",
     // clang-format on
     .tp_doc = PyDoc_STR("Custom objects"),
     .tp_basicsize = sizeof(CustomObject),
     .tp_itemsize = 0,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
     .tp_new = Custom_new,
     .tp_init = (initproc)Custom_init,
     .tp_dealloc = (destructor)Custom_dealloc,
+    .tp_traverse = (traverseproc)Custom_traverse,
+    .tp_clear = (inquiry)Custom_clear,
     .tp_members = Custom_members,
     .tp_methods = Custom_methods,
     .tp_getset = Custom_getsetters,
@@ -160,12 +165,12 @@ static PyTypeObject CustomType = {
 
 static PyModuleDef custommodule = {
     PyModuleDef_HEAD_INIT,
-    .m_name = "custom3",
+    .m_name = "custom4",
     .m_doc = "Example module that creates an extension type.",
     .m_size = -1,
 };
 
-PyMODINIT_FUNC PyInit_custom3() {
+PyMODINIT_FUNC PyInit_custom4() {
     PyObject* m;
     if (PyType_Ready(&CustomType) < 0) {
         return NULL;
