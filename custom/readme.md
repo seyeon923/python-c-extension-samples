@@ -19,6 +19,9 @@
     - [`Custom_init`(`tp_init`)](#custom_inittp_init)
     - [멤버 메소드](#멤버-메소드)
     - [TP_FLAGS_BASETYPE](#tp_flags_basetype)
+  - [멤버 타입 제한하기 - `custom3`](#멤버-타입-제한하기---custom3)
+    - [Getter and Setter](#getter-and-setter)
+    - [`tp_init` 업데이트(타입 체크 추가)](#tp_init-업데이트타입-체크-추가)
 
 ## Basic Type - custom
 
@@ -418,3 +421,128 @@ static PyTypeObject CustomType = {
 ```
 
 지금까지 메소드를 만들면서 해당 객체의 타입이 `CustomType`일 것(`CustomType`의 서브클래스가 될 수도 있음)이라는 가정 없이 잘 만들었으므로 위처럼 `Py_TPFLAGS_BASETYPE`을 문제없이 사용할 수 있다.
+
+## 멤버 타입 제한하기 - `custom3`
+
+`custom3` 모듈에서는 `custom2` 모듈에서 발전시켜 `first`, `last` 애트리뷰트에 대해 직접 접근을 없애고, getter, setter 함수를 제공하여 파이썬 문자열 외에 다른 타입을 사용할 수 없게하고 해당 애트리뷰트를 없애는 것도 못하도록 해본다. `custom3` 모듈의 소스코드는 [custom3.c](custom3.c)에서 확인할 수 있다.
+
+### Getter and Setter
+
+`first`, `last` 를 멤버 애트리뷰트로 노출시키는 대신, getter, setter 함수를 내보낸다.
+
+`first` 멤버의 getter, setter 구현 `Custom_getfirst`, `Custom_setfirst`는 다음과 같다.
+
+```c
+static PyObject* Custom_getfirst(CustomObject* self, void* closure) {
+    Py_INCREF(self->first);
+    return self->first;
+}
+
+static int Custom_setfirst(CustomObject* self, PyObject* value, void* closure) {
+    PyObject* tmp;
+    if (value == NULL) {
+        PyErr_SetString(PyExc_TypeError, "Cannot delete the 'first' attribute");
+        return -1;
+    }
+    if (!PyUnicode_Check(value)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "The 'first' attribute value must be a string");
+        return -1;
+    }
+
+    tmp = self->first;
+    Py_INCREF(value);
+    self->first = value;
+    Py_DECREF(tmp);
+
+    return 0;
+}
+```
+
+setter 함수를 보면 설정하려는 `value`를 삭제하는 경우(`NULL`로 대입)와 `value`가 파이썬 스트링이 아닌경우 exception을 발생시키는 것을 알 수 있다.
+
+`last`에 대한 getter, setter 도 `Custom_getlast`, `Custom_setlast`라는 이름으로 위와 동일하게 구현하였다.
+
+> `void* closure`는 setter, getter 함수 인자로 정의해줘야 하지만, 여기선 사용하지 않는다.
+
+`Custom` 객체에 `first`, `last` 의 getter, setter를 추가하기 위해 해당하는 `PyGetSetDef` 정보를 넣어서 `PyGetSetDef` 배열을 만들어 이를 `CustomType.tp_getset`에 할당한다.
+
+```c
+static PyGetSetDef Custom_getsetters[] = {
+    {"first", (getter)Custom_getfirst, (setter)Custom_setfirst, "first name",
+     NULL},
+    {"last", (getter)Custom_getlast, (setter)Custom_setlast, "last name", NULL},
+    {NULL}  // Sentinel
+};
+
+static PyTypeObject CustomType = {
+    // ...
+    .tp_getset = Custom_getsetters,
+    // ...
+};
+```
+
+`PyGetSetDef`는 다음과 같이 생겼다.
+
+```c
+typedef struct PyGetSetDef {
+    const char *name;
+    getter get;
+    setter set;
+    const char *doc;
+    void *closure;
+} PyGetSetDef;
+```
+
+또한, `tp_members`에서 `first`, `last` 애트리뷰트를 제거한다.
+
+```c
+static PyMemberDef Custom_members[] = {
+    {"number", T_INT, offsetof(CustomObject, number), 0, "custom number"},
+    {NULL}  // Sentinel
+};
+
+static PyTypeObject CustomType = {
+    // ...
+    .tp_members = Custom_members,
+    // ...
+};
+```
+
+### `tp_init` 업데이트(타입 체크 추가)
+
+추가로 `tp_init` 핸들러 함수(`Custom_init`)의 구현에서도 `first`, `last` 인자가 항상 Python 문자열 객체가 되도록 다음처럼 수정한다.
+
+```c
+static int Custom_init(CustomObject* self, PyObject* args, PyObject* kwargs) {
+    static char* kwlist[] = {"first", "last", "number", NULL};
+    PyObject* first = NULL;
+    PyObject* last = NULL;
+    PyObject* tmp;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|UUi", kwlist, &first,
+                                     &last, &self->number)) {
+        return -1;
+    }
+
+    if (first) {
+        tmp = self->first;
+        Py_INCREF(first);
+        self->first = first;
+        Py_XDECREF(tmp);
+    }
+
+    if (last) {
+        tmp = self->last;
+        Py_IncRef(last);
+        self->last = last;
+        Py_XDECREF(tmp);
+    }
+
+    return 0;
+}
+```
+
+`PyArg_ParseTupleAndKeywords()` 함수에서 format string이 `"|OOi"`에서 `"|UUi"`로 변경된 것을 확인할 수 있다. 또한, 따라서, `first`, `last`가 더이상 `NULL`일 수 없으므로 `Py_XDECREF` 대신 `Py_DECREF`로 바꿀 수 있다.
+
+> 다만, 여전히 `tp_dealloc`에서는 `Py_XDECREF`를 사용해야 하는데, `tp_new` 수행 중에 에러가 발생할 수 있기 때문이다.

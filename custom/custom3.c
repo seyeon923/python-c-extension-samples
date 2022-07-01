@@ -54,14 +54,14 @@ static int Custom_init(CustomObject* self, PyObject* args, PyObject* kwargs) {
         tmp = self->first;
         Py_INCREF(first);
         self->first = first;
-        Py_XDECREF(tmp);
+        Py_DECREF(tmp);
     }
 
     if (last) {
         tmp = self->last;
         Py_IncRef(last);
         self->last = last;
-        Py_XDECREF(tmp);
+        Py_DECREF(tmp);
     }
 
     return 0;
