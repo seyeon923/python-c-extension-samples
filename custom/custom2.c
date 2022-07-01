@@ -78,11 +78,11 @@ static PyMemberDef Custom_members[] = {
 // Custom.name
 static PyObject* Custom_name(CustomObject* self, PyObject* Py_UNUSED(ignore)) {
     if (self->first == NULL) {
-        PyErr_SetString(PyExc_AttributeError, "first");
+        PyErr_SetString(PyExc_AttributeError, "No 'first' attritbute");
         return NULL;
     }
     if (self->last == NULL) {
-        PyErr_SetString(PyExc_AttributeError, "last");
+        PyErr_SetString(PyExc_AttributeError, "No 'last' attribute");
         return NULL;
     }
     return PyUnicode_FromFormat("%S %S", self->first, self->last);
