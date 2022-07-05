@@ -27,6 +27,7 @@
     - [`Custom_clear`(`tp_clear`)](#custom_cleartp_clear)
     - [`Custom_dealloc` 수정](#custom_dealloc-수정)
     - [`Py_TPFLAGS_HAVE_GC`](#py_tpflags_have_gc)
+  - [다른타입 상속하기](#다른타입-상속하기)
 
 ## Basic Type - custom
 
@@ -723,3 +724,74 @@ static PyTypeObject CustomType = {
 ```
 
 > 만약 `tp_alloc` 과 `tp_free` 핸들러를 직접 구현한 경우, 이들도 GC를 지원하기 위해 수정해줘야 하지만 대부분의 경우 기본 구현을 사용한다.
+
+## 다른타입 상속하기
+
+다른 타입을 상속한 extension 타입을 만드는 것도 가능하다. 가장 쉬운 방법은 built-in 타입을 상속하는 것으로 built-in `list` 타입을 상속한 `SubList`를 만드는 간단한 예제를 살펴본다.
+
+> extension 모듈의 타입간의 상속은 쉽지 않은가 봄.
+
+`SubList`는 `list`를 그대로 상속한뒤 추가로 내부적으로 `state` 카운트 변수를 저장하고 `increment` 함수를 제공하여 해당 함수 호출 시 마다 `state` 값을 1씩 증가시키고 이를 반환하도록 하자.
+
+```python
+>>> import sublist
+>>> s = sublist.SubList(range(3))
+>>> s.extend(s)
+>>> print(s)
+[0, 1, 2, 0, 1, 2]
+>>> print(s.increment())
+1
+>>> print(s.increment())
+2
+```
+
+위 `sublist` 모듈의 소스코드는 [sublist.c](sublist.c)에서 확인할 수 있다.
+
+`SubListObject`를 선언할 때 맨 앞부분에 `PyObject_HEAD` 대신 상속하려는 `list` 타입의 객체 struct인 `PyListObject`를 선언한다.(`PyListObject`가 `PyObject_HEAD`를 포함할 것임)
+
+```c
+typedef struct {
+    PyListObject list;
+    int state;
+} SubListObject;
+```
+
+또한, 이렇게 `SubListObject`를 선언함으로 `SubList` 인스턴스의 경우 `PyObject*`, `PyListObject*`, `PySubListObject*`로 모두 안전하게 형변환할 수 있게 된다.
+
+```c
+static int SubList_init(SubListObject* self, PyObject* args, PyObject* kwds) {
+    if (PyList_Type.tp_init((PyObject*)self, args, kwds) < 0) {
+        return -1;
+    }
+    self->state = 0;
+    return 0;
+}
+```
+
+위처럼 init 함수는 기반클래스의 init 함수를 사용하도록 하였다. `tp_new`, `tp_dealloc` 함수에서도 직접 `tp_alloc`, `tp_free`를 호출하지 않고 기반클래스의 `tp_new`, `tp_dealloc` 에서 호출하도록 해야한다.
+
+마지막으로 모듈 초기화과정에서 `PyType_Read` 호출 전에 `tp_base` 항목에 기반클래스인 `&PyList_Type`을 할당해줘야한다.(cross-compiler 문제로 초기화시 직접 할당이 안된다고 함.)
+
+```c
+PyMODINIT_FUNC PyInit_sublist(void) {
+    PyObject* m;
+    SubListType.tp_base = &PyList_Type;
+    if (PyType_Ready(&SubListType) < 0) {
+        return NULL;
+    }
+
+    m = PyModule_Create(&sublistmodule);
+    if (m == NULL) {
+        return NULL;
+    }
+
+    Py_INCREF(&SubListType);
+    if (PyModule_AddObject(m, "SubList", (PyObject*)&SubListType) < 0) {
+        Py_DECREF(&SubListType);
+        Py_DECREF(m);
+        return NULL;
+    }
+
+    return m;
+}
+```

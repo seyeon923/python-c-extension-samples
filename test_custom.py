@@ -91,3 +91,10 @@ collected = gc.collect()
 # custom4.Custom object destructed!
 print(f'{collected} objects are collected')
 print()
+
+import sublist
+s = sublist.SubList(range(3))
+s.extend(s)
+print(f's = {s}')
+print(f's.increment() = {s.increment()}')
+print(f's.increment() = {s.increment()}')
