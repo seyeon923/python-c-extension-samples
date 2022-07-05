@@ -22,6 +22,11 @@
   - [멤버 타입 제한하기 - `custom3`](#멤버-타입-제한하기---custom3)
     - [Getter and Setter](#getter-and-setter)
     - [`tp_init` 업데이트(타입 체크 추가)](#tp_init-업데이트타입-체크-추가)
+  - [Cyclic Garbage Collection 지원 - custom4](#cyclic-garbage-collection-지원---custom4)
+    - [`Custom_traverse`(`tp_traverse`)](#custom_traversetp_traverse)
+    - [`Custom_clear`(`tp_clear`)](#custom_cleartp_clear)
+    - [`Custom_dealloc` 수정](#custom_dealloc-수정)
+    - [`Py_TPFLAGS_HAVE_GC`](#py_tpflags_have_gc)
 
 ## Basic Type - custom
 
@@ -546,3 +551,175 @@ static int Custom_init(CustomObject* self, PyObject* args, PyObject* kwargs) {
 `PyArg_ParseTupleAndKeywords()` 함수에서 format string이 `"|OOi"`에서 `"|UUi"`로 변경된 것을 확인할 수 있다. 또한, 따라서, `first`, `last`가 더이상 `NULL`일 수 없으므로 `Py_XDECREF` 대신 `Py_DECREF`로 바꿀 수 있다.
 
 > 다만, 여전히 `tp_dealloc`에서는 `Py_XDECREF`를 사용해야 하는데, `tp_new` 수행 중에 에러가 발생할 수 있기 때문이다.
+
+## Cyclic Garbage Collection 지원 - custom4
+
+파이썬에는 순환 참조로 인해 더 이상 필요 없지만(해당 객체에 접근할 수 없지만) reference count가 0이 아닌 객체를 식별하고 정리해주는 **Cyclic Garbage Collector(GC)** 가 존재한다.
+
+예를 들어, 다음처럼 `list` 객체 `l`을 하나 만들고 다시 해당 리스트 객체안에 해당 객체 `l`을 담게 되면 참조 카운트가 다시 증가하면서 실제 객체는 한개이지만 참조 카운트는 2개가 되는 상태가 된다.
+
+```python
+import sys
+l = []
+print(f"l's reference count: {sys.getrefcount(l) - 1}") # 1
+l.append(l)
+print(f"l's reference count: {sys.getrefcount(l) - 1}") # 2
+```
+
+> `sys.getrefcount` 호출 시 전달받는 인자의 임시 객체가 생기면서 참조 카운트가 1 증가하게 되므로 위 코드에서는 1을 뺀 값을 출력하도록 하였다.
+
+이때, 객체 `l`을 삭제하게 되면 더이상 객체 `l`에 접근할 수 없는상태(즉, 필요 없는 상태)가 되지만 참조카운트가 하나 줄어도 1로 0이 아니게 되어 실제로 파괴가 되지 않는다.
+이때, 이러한 객체의 존재를 확인하고 이렇게 쓸모 없어진 객체를 파이썬의 **GC** 가 이를 식별하고 객체를 소멸시켜 준다.
+이러한 가비지 수집은 파이썬에서 알아서 주기적으로 수행해 주지만 다음처럼 `gc.collect` 함수를 호출하여 직접 수행하도록 명령할 수도 있다.
+
+```python
+import gc
+del l # "l"의 참조카운트가 1이 되고 실제로 파괴되지 않음
+gc.collect() # 파이썬의 가비지 수집기가 이렇게 필요없어진 객체를 식별하여 파괴시켜줌
+```
+
+하지만 `custom.Custom` 객체의 경우 문제가 있는데, 다음처럼 `custom2.Custom` 객체를 생성한뒤 다시 제거하게 되면 `"custom2.Custom object destructed!"` 라는 메세지가 출력되면서 객체가 문제없이 파괴되는 것을 확인할 수 있다.
+
+```python
+import custom2
+c = custom2.Custom()
+del c # custom2.Custom object destructed!
+```
+
+> [custom2.c](custom2.c) 의 `Custom_dealloc`에 해당 로그를 남기도록 코드를 작성해둠.
+>
+> ```c
+> static void Custom_dealloc(CustomObject* self) {
+>     Py_XDECREF(self->first);
+>     Py_XDECREF(self->last);
+>     Py_TYPE(self)->tp_free((PyObject*)self);
+> 
+>     printf("custom2.Custom object destructed!\n");
+> }
+> ```
+
+하지만, 다음처럼 `first` 속성에 자기자신을 다시 참조시킨 뒤 해당 객체에 대한 참조를 삭제하면 파괴가 되지 않는 것을 확인할 수 있다.
+
+```python
+c = custom2.Custom()
+c.first = c
+del c # c가 가르키던 객체가 파괴되지 않음!
+```
+
+다음처럼, 가비지 수집을 수행해도 `c`가 가르키던 객체가 파괴되지 않는 것을 확인할 수 있는데, 해당 `custom2.Custom` 타입이 가비지 컬렉터가 이를 탐지할 수 있도록 지원하지 않았기 때문이다.
+
+```python
+gc.collect()
+```
+
+이번 모듈 `custom4`([custom4.c](custom4.c))에서는 가비지 컬렉터가 이를 적절이 감지할 수 있도록 코드를 수정해본다.
+
+> `custom3` 에서는 `first`, `last`에 가 파이썬 스트링만 할당할 수 있으므로 사실 이러한 순환참조가 일어날 가능 성은 없어 보인다.(누가`str` 상속해서 순환참조 넣도록 하면 될 수도 있을 것 같긴 함.)
+>
+> [python 문서](https://docs.python.org/3/extending/newtypes_tutorial.html#supporting-cyclic-garbage-collection)에서는 `custom3.Custom`의 서브클래스에서 새로운 애트리뷰트에 순환참조를 넣은 경우에도 GC가 제대로 이를 탐지하지 못할 것이라고 돼있는 것 같은데, 실제로 테스트 해보면 잘 파괴되는 것 같음...  
+> > 파이썬 인터프리터에서 새로 추가되는 속성에 대해서는 GC가 그냥 순환참조를 탐색할 수 있는 것 같아보이긴 하는데, 정확히는 잘 모르겠음...
+
+### `Custom_traverse`(`tp_traverse`)
+
+먼저 GC가 해당 객체의 하위 객체들이 순환 참조를 이루는지 탐색할 수 있도록 다음처럼 순회 함수를 제공한다.
+
+```c
+static int Custom_traverse(CustomObject *self, visitproc visit, void *arg)
+{
+    int vret;
+    if (self->first) {
+        vret = visit(self->first, arg);
+        if (vret != 0)
+            return vret;
+    }
+    if (self->last) {
+        vret = visit(self->last, arg);
+        if (vret != 0)
+            return vret;
+    }
+    return 0;
+}
+```
+
+각각의 하위 객체(`first`, `last`)가 순환 참조를 이룰 수 있으므로, 각각의 하위 객체에 대해 순회 함수의 인자로 전달되는 `visit` 함수를 호출해줘야한다. `visit` 함수는 하위 객체와 추가적인 인자 `arg`를 인자로 전달받고, 정수를 반환한다. 이때, 정수가 0이 아니면 해당 값을 바로 반환해야 한다.
+
+CPython에는 위 코드를 간단하게 작성할 수 있도록 `Py_VISIT` 매크로를 제공하는데, 이를 사용하면 다음처럼 간단하게 작성할 수 있다.
+
+```c
+static int Custom_traverse(CustomObject* self, visitproc visit, void* arg) {
+    Py_VISIT(self->first);
+    Py_VISIT(self->last);
+    return 0;
+}
+```
+
+> `Py_VISIT` 매크로를 사용하기 위해서 순회 함수 인자의 이름은 꼭 위처럼 `visit`, `arg`를 사용해야 한다.
+
+`CustomType.tp_tarverse` 필드에 다음처럼 해당 함수를 할당해준다.
+
+```c
+static PyTypeObject CustomType = {
+    // ...
+    .tp_traverse = (traverseproc)Custom_traverse,
+    // ...
+};
+```
+
+### `Custom_clear`(`tp_clear`)
+
+다음으로, 순환참조가 일어날 수 있는 하위객체들에 대해서 다음처럼 clear함수를 제공해야 된다.
+
+```c
+static int Custom_clear(CustomObject* self) {
+    Py_CLEAR(self->first);
+    Py_CLEAR(self->last);
+    return 0;
+}
+
+static PyTypeObject CustomType = {
+    // ...
+    .tp_clear = (inquiry)Custom_clear,
+    // ...
+};
+```
+
+`Py_CLEAR` 매크로 대신 다음처럼 작성할 수도 있지만, 실수가 생길 수도 있고 훨씬 사용하기 편하므로 **항상 `Py_CLEAR`을 사용하도록 하자**
+
+```c
+PyObject *tmp;
+tmp = self->first;
+self->first = NULL;
+Py_XDECREF(tmp);
+```
+
+> 애트리뷰트를 `NULL`로 지정하기전에 참조 카운트를 감소시키게 되면 해당 속성의 파괴자가 다시 해당 속성을 읽게되는 경우가 생길 수 있다.(특히, 순환참조가 있는 경우)
+
+### `Custom_dealloc` 수정
+
+`Custom_dealloc`을 수행 시 애트리뷰트를 삭제하면서 임의의 코드가 GC를 수행하도록 할 수 있으므로 이 객체가 GC에 의해 추적되지 않도록 `PyObject_GC_Untrack` 함수를 호출해 주어야 한다.
+
+다음은 `PyObject_GC_Untrack` 과 `Custom_clear`함수를 사용하여 재 구현한 `Custom_dealloc`이다.
+
+```c
+static void Custom_dealloc(CustomObject* self) {
+    PyObject_GC_UnTrack(self);
+    Custom_clear(self);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+
+    printf("custom4.Custom object destructed!\n");
+}
+```
+
+### `Py_TPFLAGS_HAVE_GC`
+
+마지막으로 `.tp_flags`에 `Py_TPFLAGS_HAVE_GC` flag를 더한다.
+
+```c
+static PyTypeObject CustomType = {
+    // ...
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
+    // ...
+};
+```
+
+> 만약 `tp_alloc` 과 `tp_free` 핸들러를 직접 구현한 경우, 이들도 GC를 지원하기 위해 수정해줘야 하지만 대부분의 경우 기본 구현을 사용한다.
