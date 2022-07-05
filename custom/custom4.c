@@ -31,7 +31,7 @@ static void Custom_dealloc(CustomObject* self) {
     Custom_clear(self);
     Py_TYPE(self)->tp_free((PyObject*)self);
 
-    printf("Custom object destructed\n");
+    printf("custom4.Custom object destructed!\n");
 }
 
 static PyObject* Custom_new(PyTypeObject* type, PyObject* args,

@@ -51,9 +51,10 @@ try:
     del c3.first
 except Exception as ex:
     print(f'{type(ex).__name__}: {ex}')
+del c3
 print()
 
-print('Test module custom3')
+print('Test module custom4')
 import custom4
 import gc
 
@@ -62,14 +63,16 @@ class Derived(custom3.Custom):
     pass
 
 
-print('Create object "n" derived from custom3.Custom')
-n = Derived()
+print('Create object "c2" of custom2.Custom')
+c2 = custom2.Custom()
 print('Add circular reference')
-n.some_attribute = n
-print('Delete "n"')
-del n
+c2.first = c2
+print('Delete "c2"')
+del c2
 print('Do garbage collect')
-gc.collect()
+collected = gc.collect()
+# "custom2.Custom object destructed!" message not logged here!
+print(f'{collected} objects are collected')
 print()
 
 
@@ -84,5 +87,7 @@ n.some_attribute = n
 print('Delete "n"')
 del n
 print('Do garbage collect')
-gc.collect()
+collected = gc.collect()
+# custom4.Custom object destructed!
+print(f'{collected} objects are collected')
 print()

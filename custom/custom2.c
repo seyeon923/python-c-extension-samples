@@ -3,6 +3,7 @@
 #include "structmember.h"
 
 #include <stddef.h>
+#include <stdio.h>
 
 typedef struct {
     // clang-format off
@@ -17,6 +18,8 @@ static void Custom_dealloc(CustomObject* self) {
     Py_XDECREF(self->first);
     Py_XDECREF(self->last);
     Py_TYPE(self)->tp_free((PyObject*)self);
+
+    printf("custom2.Custom object destructed!\n");
 }
 
 // Custom.__new__
