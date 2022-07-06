@@ -10,5 +10,5 @@ setup(name="custom", version="1.0",
 setup(name="sublist", version="1.0",
       ext_modules=[Extension("sublist", ["defining_extension_types/sublist.c"])])
 
-setup(name="spam", version="1.0",
-      ext_modules=[Extension("spam", ["extending_python_with_c_or_c++/spammodule.c"])])
+setup(name="kimchi", version="1.0",
+      ext_modules=[Extension("kimchi", ["extending_python_with_c_or_c++/kimchimodule.c"])])

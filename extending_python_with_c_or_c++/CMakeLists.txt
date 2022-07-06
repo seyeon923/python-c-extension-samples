@@ -1,1 +1,1 @@
-add_library(spam spammodule.c)
+add_library(kimchi kimchimodule.c)

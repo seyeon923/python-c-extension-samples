@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-static PyObject* spam_system(PyObject* self, PyObject* args) {
+static PyObject* kimchi_system(PyObject* self, PyObject* args) {
     char const* command;
     int sts;
 
@@ -14,18 +14,18 @@ static PyObject* spam_system(PyObject* self, PyObject* args) {
     return PyLong_FromLong(sts);
 }
 
-static PyMethodDef SpamMethods[] = {
-    {"system", spam_system, METH_VARARGS, "Execute a shell command"},
+static PyMethodDef KimchiMethods[] = {
+    {"system", kimchi_system, METH_VARARGS, "Execute a shell command"},
     {NULL, NULL, 0, NULL}  // Sentinel
 };
 
-static PyModuleDef spammodule = {
+static PyModuleDef kimchimodule = {
     PyModuleDef_HEAD_INIT,
-    .m_name = "spam",        // name of module
-    .m_doc = "spam module",  // module documentation, may be NULL
+    .m_name = "kimchi",        // name of module
+    .m_doc = "kimchi module",  // module documentation, may be NULL
     .m_size = -1,  // size of per-interpreter state of the module, or -1 if
                    // the module keeps state in global variables
-    .m_methods = SpamMethods,
+    .m_methods = KimchiMethods,
 };
 
-PyMODINIT_FUNC PyInit_spam() { return PyModule_Create(&spammodule); }
+PyMODINIT_FUNC PyInit_kimchi() { return PyModule_Create(&kimchimodule); }
