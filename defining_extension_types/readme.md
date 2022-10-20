@@ -31,7 +31,7 @@
 
 ## Basic Type - custom
 
-[custom.c](custom.c)에서 가장 간단한 형태의 Extension 객체인 `Custom`을 만든다.
+[`custom.c`](custom.c)에서 가장 간단한 형태의 Extension 객체인 `Custom`을 만든다.
 
 > 여기서 만드는 `Custom` 객체는 전통적인 방식의 *static* extension type 이라고 함.
 > 힙에 할당되는 extension type을 정의하려면 [`PyType_FromSpec()`](https://docs.python.org/3/c-api/type.html#c.PyType_FromSpec)을 사용해야 된다고 함.
@@ -146,7 +146,7 @@ TypeError: can only concatenate str (not "custom.Custom") to str
 
 ### 모듈 초기화
 
-모듈의 초기화는 [custom.c](custom.c)에서 정의한 `PyInit_custom()` 함수에서 수행하게 된다.
+모듈의 초기화는 [`custom.c`](custom.c)에서 정의한 `PyInit_custom()` 함수에서 수행하게 된다.
 
 `PyType_Ready()` 함수를 통해 `CustomType`의 설정하지 않은 필드를 적절한 디폴트 값으로 설정하여 초기화를 하게된다.
 
@@ -187,7 +187,7 @@ python setup.py build
 
 ## 데이터 멤버 및 메소드 추가된 타입 - custom2
 
-위에서 만든 `Custom`타입에 `first`, `last`, `number` 데이터 멤버와 `name` 멤버 메소드를 추가한 `custom2` 모듈을 만들어본다. 소스코드는 [custom2.c](custom2.c)에서 확인할 수 있다.
+위에서 만든 `Custom`타입에 `first`, `last`, `number` 데이터 멤버와 `name` 멤버 메소드를 추가한 `custom2` 모듈을 만들어본다. 소스코드는 [`custom2.c`](custom2.c)에서 확인할 수 있다.
 
 ### 데이터 멤버
 
@@ -430,7 +430,7 @@ static PyTypeObject CustomType = {
 
 ## 멤버 타입 제한하기 - `custom3`
 
-`custom3` 모듈에서는 `custom2` 모듈에서 발전시켜 `first`, `last` 애트리뷰트에 대해 직접 접근을 없애고, getter, setter 함수를 제공하여 파이썬 문자열 외에 다른 타입을 사용할 수 없게하고 해당 애트리뷰트를 없애는 것도 못하도록 해본다. `custom3` 모듈의 소스코드는 [custom3.c](custom3.c)에서 확인할 수 있다.
+`custom3` 모듈에서는 `custom2` 모듈에서 발전시켜 `first`, `last` 애트리뷰트에 대해 직접 접근을 없애고, getter, setter 함수를 제공하여 파이썬 문자열 외에 다른 타입을 사용할 수 없게하고 해당 애트리뷰트를 없애는 것도 못하도록 해본다. `custom3` 모듈의 소스코드는 [`custom3.c`](custom3.c)에서 확인할 수 있다.
 
 ### Getter and Setter
 
@@ -587,7 +587,7 @@ c = custom2.Custom()
 del c # custom2.Custom object destructed!
 ```
 
-> [custom2.c](custom2.c) 의 `Custom_dealloc`에 해당 로그를 남기도록 코드를 작성해둠.
+> [`custom2.c`](custom2.c) 의 `Custom_dealloc`에 해당 로그를 남기도록 코드를 작성해둠.
 >
 > ```c
 > static void Custom_dealloc(CustomObject* self) {
@@ -613,7 +613,7 @@ del c # c가 가르키던 객체가 파괴되지 않음!
 gc.collect()
 ```
 
-이번 모듈 `custom4`([custom4.c](custom4.c))에서는 가비지 컬렉터가 이를 적절이 감지할 수 있도록 코드를 수정해본다.
+이번 모듈 `custom4`([`custom4.c`](custom4.c))에서는 가비지 컬렉터가 이를 적절이 감지할 수 있도록 코드를 수정해본다.
 
 > `custom3` 에서는 `first`, `last`에 가 파이썬 스트링만 할당할 수 있으므로 사실 이러한 순환참조가 일어날 가능 성은 없어 보인다.(누가`str` 상속해서 순환참조 넣도록 하면 될 수도 있을 것 같긴 함.)
 >
@@ -745,7 +745,7 @@ static PyTypeObject CustomType = {
 2
 ```
 
-위 `sublist` 모듈의 소스코드는 [sublist.c](sublist.c)에서 확인할 수 있다.
+위 `sublist` 모듈의 소스코드는 [`sublist.c`](sublist.c)에서 확인할 수 있다.
 
 `SubListObject`를 선언할 때 맨 앞부분에 `PyObject_HEAD` 대신 상속하려는 `list` 타입의 객체 struct인 `PyListObject`를 선언한다.(`PyListObject`가 `PyObject_HEAD`를 포함할 것임)
 
